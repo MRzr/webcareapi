@@ -1,0 +1,666 @@
+FORMAT: 1A
+HOST: https://webcaretesting.septim.cz:8443/visualio/api/webcareapi/
+
+# Septim Web API
+
+API documentation for upcoming Septim Web App.
+
+Every request must include header Accept-Language to get response in correct language, if missing or not recognized default language is used.
+
+` `
+
+Authorization token is obtained through HTTP Basic Auth and verified by login request. Identification of customer (or admin) is decoded from token.
+
+Login diagram: https://drive.google.com/file/d/0B1_u4k6eQMDqbXdFeUgxdXY1SWs/view?usp=sharing
+    
+` `
+
+
+Successful response is code 200. Errors are returned as standard HTTP errors with corresponding error code (4xx - client error, 5xx - server error) and description 
+
+When force error occurs server returns status code 449 and object with following schema
+https://drive.google.com/file/d/0B1_u4k6eQMDqc3NnZy1Zcm53azQ/view?usp=sharing
+Client displays alert constructed from force object and responses with force_answer or force_cancel. Only POST methods implements force error.
+
+` `
+
+Order type
+Values may be one of:
+   - toBill .. Order is added to existing opened bill identified by the billCode. The order will be paid with whole bill, so no payment is allowed at the moment when the order is created.
+   - toTable .. Order is created as a single bill on the table identified by tableID. Order must be paid in advance from the user account or by credit card.
+   - toTakeAway .. Order is processed as TakeAway and bill is created during pickup. Order must be paid in advance from the user account or by credit card.
+   
+Order payment can be either account or creditcard. When creating order with account payment method, customer's balance is checked and deducted from his account, if paying by creditcard, web api is responsible for payment.
+
+Order can be in state 0 - Payment required only for 30 minutes, after this time order is cancelled by WEB API.
+
+Order status numbers:
+
+-- OPEN -- 
+
+0 - Payment required
+
+1 - Order waiting
+
+2 - Ready for pick up
+
+3 - Open Account
+
+-- CLOSED --
+
+5 - Completed
+
+6 - Cancelled
+
+Order process diagram: https://drive.google.com/file/d/1vv5XLxie2fQq3UEHmDg1OdzXrPS-yLBi/view?usp=sharing
+
+` `
+
+
+Definition of additional data objects with example: https://docs.google.com/document/d/14NSKxR2U8BEieUCxF4dxUFpR49ISOTBhmiXAw_OpBWQ/edit?usp=sharing
+
+` `
+
+Links returned by API can be formatted in two ways. Standard links with http:// or https:// and link to resource on page `image://product.jpg` means that path to resource is `https://server.url/image/product.jpg`
+
+` `
+
+
+All parameters and request attributes are optional by default.
+
+` `
+
+
+
+
+## Product list [/products]
+
+### Get category list with products ids [GET /products/categories]
+
+Returns complete unfiltered list of product categories with product ids. Product modifiers which cannot be sold as solo product is not contained in this response.
+
++ Response 200 (application/json)
+    + Attributes (array[ProductCategory], fixed-type, required)
+
+
+### Get product details by ids [GET /products/details?productIds={ids}&modifiedOnly={modifiedOnly}]
+
+Parameter productIds defines which product details should be returned, if combined with modifiedOnly, results are filtered to contain only newly updated results from provided list of ids.
+
+
+Return list of requested product details.
+
++ Parameters
+    - ids:  1,2,3 (array[number], required) - List of product ids to be returned.
+    - modifiedOnly: true  (bool, required) - Filter list to contain only updated products.
++ Response 200  (application/json)
+    + Attributes (array[Product], fixed-type, required)
+
+### Get available products with price [GET /products/available?outletId={outletId}&orderDateTime={orderDateTime}&customerId={customerId}]
+
+List and prices can differ based on provided outletId or orderDateTime and customerID (happy hours, sales, customer discount etc.).
+
+Products not contained in response should be hidden from customer. (List of ids from this request is filter for /product/categories). Request does not distinguish products and modifiers.
+
+
+Return list of available product ids and prices.
+
++ Parameters
+    - outletId:  123 (number, required) - Unique identification of outlet, provided by Outlet list all selected by customer.
+    - orderDateTime: `dd-MM-yyyy HH:mm`  (string, required) - Date time of planned order selected by customer.
+    - customerId: 123 (number, optional) - Unique identification of customer
++ Response 200  (application/json)
+    + Attributes (array[AvailableProduct], fixed-type, required)
+    
+
+
+## Outlet list [/outlets]
+
+### Get outlet list [GET /outlets]
+
+Seperated list of outlets with tables
+
+
+
+Returns array of outlets, containing table list.
+
++ Response 200 (application/json)
+    + Attributes (array[Outlet], fixed-type, required)
+
+
+  
+### Get available order dates for outlets [GET /outlets/orderdates?outletIds={ids}]
+
+Order dates contains days available to order and times from and to for order. 
+Returns list of available order dates for outlets requested by parameter outletIds.
+
++ Parameters
+    - ids:  1,2,3 (array[number], required) - List of outlet ids
+    
++ Response 200 (application/json)
+    + Attributes (array[OutletOrderAvailability], fixed-type, required)
+
+## Orders  [/order]
+
+Orders type can be toTakeAway, toTable, toBill
+
+Payment method can be either account or creditcard (defined in outlet attributes)
+
+Order process diagram: https://drive.google.com/file/d/0B1_u4k6eQMDqMmpOV1o3YXptUzg/view?usp=sharing
+
+
+### Create order [POST /order]
+
+
+Customer is identified by auth header or customerEmail (if not registered). Order can be created without customer identification.
+
+
+If using gateway as payment method request is made by WEB API and order status is set to 0 - Payment required. Web API confirms order after payment is made and displays client result of payment and order object. If payment was unsuccessful, then order is canceled. Request is authorized with admin username and password. Registered customer is identified by email if paying through gateway.
+If payment is not completed within 30 minutes, order is cancelled by WEB API.
+
+
+If using customer account in Septim as payment method, request is made by Client. Customer's balance is checked and deducted from his account. If success, order status is set to 1 - Order waiting.  Request is authorized with customer's email and password
+
+
+If using open order orders are created with code generated by Septim (customer is handed over the code from staff). Order is assigned to existing account in Septim.
+
+
+Product prices can differ based on the order time and place, to ensure that client has correct prices, total price of the order is calculated on client side and verified by Septim. 
+
+
+
+Returns order confirmation.
+
++ Request (application/json)
+    + Headers
+    
+            Authorization: abc  (customer credentials,optional)
+            
+    + Attributes (OrderRequest, fixed-type, required)
+        + force: abc (string, optional) - force response call
+
+        
+
++ Response 200 (application/json)
+    + Attributes (OrderConfirmation, required, fixed-type)
+
+### Get order (admin) [GET /order?orderId={orderId}]
+
+Return single order of customer by id.
+
++ Parameters
+    - orderId: abc (string, required) - Identification of order
++ Request (application/json)
+    + Headers
+    
+            Authorization: abc (required, admin)
+
++ Response 200 (application/json)
+    + Attributes (Order, required, fixed-type)
+
+### Get recommended products for order [POST /order/recommendation]
+
+Returns recommended products for planned order and recomendation describing texts.
+Ideal number of products is 5. Algorithm for displaying recommended products is on Septim side - not client side
+
++ Request (application/json)
+    + Headers
+    
+            Authorization: abc  (customer, if present recommendations are customized for current customer)
+
+    + Attributes (OrderBaseRequest, fixed-type, required)
+        + force: abc (string, optional) - force response call
+
+        
++ Response 200 (application/json)
+    + Attributes (array[RecommendedProduct], fixed-type, required)   
+        + force: abc (string, optional) - force response call
+
+
+
+### Order payment [POST /order/payment]
+
+Request between private Web API and Septim API. Confirms successful payment of order or cancels order in case of error in payment.
+Request is authorized with admin customername and password.
+    
++ Request (application/json)
+    + Headers
+    
+            Authorization: abc (admin credentials)
+        
+    + Attributes (PaymentResult, required, fixed-type)
+        
++ Response 200 (application/json)
+    + Attributes (PaymentResultResponse, required, fixed-type)
+
+## Web content [/web]
+
+### Get slideshow items [GET /web/slideshow]
+
+Array of images and links for main screen slideshow
+
++ Response 200 (application/json)
+    + Attributes (array[SlideshowItem], fixed-type, required)
+
+
+
+## Customer profile & management [/customer]
+
+### Login [POST /customer/login]
+
+Verifies combination of customer email and password by authorization token. If combination is wrong error code is returned, otherwise response is successful and client can use the token to authorize other requests.
+
+
+Septim does not hold status of customer login. Every request is verified by Authorization token
+Use Case of request is for client to verify if combination of email and password provided by customer is correct.
+
++ Request (application/json)
+    + Headers
+    
+            Authorization: abc (required)
+            
+    + Attributes
+        + force: abc (string, optional) - force response call
+
+
+       
++ Response 200 (application/json)
+    + Attributes (fixed-type)
+        + success: true (boolean, required)
+
+
+### Customer registration (1st step) [POST /customer/register/start]
+
+Customer email, name and other profiles informations (components defined in web config) for registration. Email to customer is sent to verify his address.
+Email contains link needed (with token) to continue registration process.
+
++ Request (application/json)
+    + Attributes (CustomerProfileRequest, fixed-type, required)
+        + force: abc (string, optional) - force response call
+
+
++ Response 200 (application/json)
+    + Attributes (fixed-type)
+        + success: true (boolean, required) - Confirmation of successful registration step.
+
+### Customer registration (2st step) [POST /customer/register/finish]
+
+Customer enters his password and completes registration. Login is not needed after this step.
+
++ Request (application/json)
+    + Attributes (fixed-type)
+
+        + password (string, required) - Password provided by customer
+        + token: abc (string, required) - Token from emailed link. Customer is identified by token.
+        + force: abc (string, optional) - force response call
+
+
++ Response 200 (application/json)
+    + Attributes (fixed-type)
+        + success: true (boolean, required) - Confirmation of successful registration step.
+
+
+
+### Change Password [POST /customer/password/change]
+
+Need to provide old Password to authorize password change.
+
+
++ Request (application/json)
+
+    + Headers
+    
+            Authorization: abc
+
+    + Attributes (fixed-type)
+        + passwordOld (string, required) - Old password provided by customer to verifies his identity. Required if changing password of logged customer.
+        + passwordNew (string, required) - New password to change provided by customer.
+        + force: abc (string, optional) - force response call
+       
+
++ Response 200 (application/json)
+    + Attributes (fixed-type)
+        + success: true (boolean, required)
+
+### Request Password Reset [POST /customer/password/resetrequest]
+
+Email with link for password reset (reset key) is send to customer if customer exist in database.
+
+
++ Request (application/json)
+    + Attributes (fixed-type)
+        + email (string, required) - Email of customer for password reset
+        + force: abc (string, optional) - force response call
+
+        
++ Response 200 (application/json)
+    + Attributes (fixed-type)
+        + success: true (boolean, required) - Confirmation of successful email reset request
+        
+
+### Reset Password [POST /customer/password/reset]
+
+Second step of password reset. Need to provide key sent to customer by email (reset request).
+
++ Request (application/json)
+
+
+    + Attributes (fixed-type)
+        + passwordNew (string, required) - New password to change provided by customer.
+        + resetKey (string, required) - Reset key sent to customer by email. Customer is identified by by this key.
+        + force: abc (string, optional) - force response call
+
++ Response 200 (application/json)
+    + Attributes (fixed-type)
+        + success: true (boolean, required)
+       
+
+### Get Customer Profile [GET /customer]
+
+Returns profile of current customer.
+
++ Request (application/json)
+    + Headers
+    
+            Authorization: abc (required)
+
++ Response 200 (application/json)
+    + Attributes (CustomerProfile, required, fixed-type)
+
+### Change Customer Profile [POST /customer]
+
+Change customer informations.
+
++ Request (application/json)
+    + Headers
+    
+            Authorization: abc (required)
+            
+    + Attributes (CustomerProfileRequest, fixed-type)
+        + force: abc (string, optional) - force response call
+
+        
++ Response 200 (application/json)
+    + Attributes (fixed-type)
+        + success: true (boolean, required)
+
+### Get active orders and last completed orders [GET /customer/orders?limitClosedCount={limitClosedCount}&statusCodes={statusCodes}]
+
+Returns list of customer's last orders, closed orders are limited by query parameter limit.
+
++ Parameters
+    - limitClosedCount: 5 (number, optional) - Number of closed orders to be returned. If not provided results are limited by Septim to 10 results.
+    - statusCodes: 1,2,3 (array[number, optional]) - List of status code to be included in results. If not provided orders are not filtered by status.
++ Request (application/json)
+    + Headers
+    
+            Authorization: abc (required)
+            
+    + Attributes (CustomerProfileRequest, fixed-type)
+        + force: abc (string, optional) - force response call
+
+        
++ Response 200 (application/json)
+    + Attributes (array[Order], fixed-type, required)
+    
+
+### Get order (customer) [GET /customer/order?orderId={orderId}]
+
+Return single order of customer by id.
+
++ Parameters
+    - orderId: abc (string, required) - Identification of order
++ Request (application/json)
+    + Headers
+    
+            Authorization: abc (required, customer)
+
++ Response 200 (application/json)
+    + Attributes (Order, required, fixed-type)
+
+
+### Get last transaction history & account balance [GET /customer/account?limitCount={limitCount}]
+
+
+Returns customer's transaction history and current account balance.
+
++ Parameters
+    - limitCount: 5 (number, optional) - Number of results to be returned. If not provided results are limited by Septim to 10 results.
++ Request (application/json)
+    + Headers
+    
+            Authorization: abc (required)
+
++ Response 200 (application/json)
+    + Attributes 
+        + transactions (array[Transaction], fixed-type, required) - List of transactions
+        + balance: 430 (number, required, fixed-type) - Current customer's balance
+
+
+## Web API requests [/api]
+
+
+### Get payment link [POST /api/payment/link]
+
+Not part of Septim API
+    
+Request between client and web api.
+
+After payment validation, browser is redirected to specified return URL with GET parameters with order id and payment result. (?orderId=abv&paymentSuccess=true)
+
++ Request (application/json)
+    + Headers
+    
+            Authorization: abc (customer credentials,optional)
+
+    + Attributes (GatewayRequest, fixed-type, required)
++ Response 200
+    + Attributes (GatewayResponse, required)
+        
+
+        
+
+       
+## Web Application [/]
+Not part of any API. This is just definition of web application url that should encoded in QR code and scanned by customers. Url parameters must follow same rules as described in /order.
+eg http://septim.visualio.cz/set?orderType=toBiil&outletId=1&billCode=abc
+
+### Set order type, place and time (QR Code) [GET /?orderType={orderType}&outletId={outletId}&tableId={tableId}&orderDateTime={orderDateTime}&billCode={billCode}]
++ Parameters
+    - outletId:  123 (number, required) - Unique identification of outlet, provided by Outlet list all selected by customer.
+    - orderDateTime: `dd-MM-yyyy HH:mm`  (string, optional) - Date time of planned order selected by customer.
+    - orderType: toBill (string, required) - Type of order (toTakeAway, toTable, toBill)
+    - tableId:  123 (number, optional) - Identification of table
+    - billCode: abc (string, optional) - Bill code for order
+    
++ Response 200  (application/json)
+    + Attributes (fixed-type)
+        + success: true (boolean, required)
+    
+
+
+# Data Structures
+
+## OrderType (enum[string])
+- toBill
+- toTakeAway
+- toTable
+
+## OrderPayment (enum[string])
+- creditcard
+- account
+
+## OrderStatus (enum[number])
+- 0 - Payment required
+- 1 - Order waiting
+- 2 - Ready for pick up
+- 3 - Open Account
+- 5 - Completed
+- 6 - Cancelled
+
+## AdditionDataComponent (enum[string])
+- const-image
+- const-text
+- var-image
+- var-text
+- input-text
+
+
+## Product (fixed-type)
+
+- id: 123 (number, required) - Product unique identificator
+- name: Soup (string, required) - Product display name
+- image: image://123.jpg (string, required) - Url to product image. See Introduction -  Links
+- description: Product Description (string, required) - Product description text
+- size: 200 ml (string, required) - Size of product (weight, volume...)
+- allergens (array[ProductAllergen], fixed-type, required) - List of allergens in product
+- modifierGroups (array[ProductModifierGroup], fixed-type, required) - List of modifier groups
+- additionalData (array[AdditionalData], fixed-type, optional) - Other product informations
+- recommendedProducts (array[RecommendedProduct], fixed-type, required) - List of products recommended for this product
+- allowDecimalAmount: true (boolean, optional) - If it is possible to order decimal amout of product
+
+## ProductAllergen (fixed-type)
+
+- shortName: 01 (string, required) - Short name of allergen
+- longName: Shrimp (string, required) - Long name of allergen
+
+## AvailableProduct (fixed-type)
+- productId: 123 (number, required) - Product unique identificator
+- price: 60.0 (number, required) - Product price in CZK
+
+## RecommendedProduct (fixed-type)
+- productId: 123 (number, required) - Product unique identificator
+- shortDescription: Special Deal (string, required) - short description of recommendation
+- description: Because you have ordered last time (string, required) long description of recommendation
+
+## ProductModifierGroup (fixed-type)
+- name: Způsob přípravy (string, required) - Display name of modifier group
+- required: true (boolean, required) - Determines if modifier group is required or optional
+- multiple: false (boolean, required) - Determines if customer can select one or more options in modifier group
+- modifiers: 1 (array[number], fixed-type, required) - Id's of modifiers (products)
+
+## ProductCategory (fixed-type)
+- id: 1 (number, required) - Unique id of category
+- name: Grill (string, required) - Display name of category
+- productIds: 1 (array[number], fixed-type, sample, required) - List of product ids in category
+- subcategories (array[ProductCategory], required) - List of subcategories
+
+## OrderItem (fixed-type)
+- productId: 123 (number, required) - Id of product to order
+- modifiers (array[number], fixed-type, optional) - List of selected modifier ids.
+- quantity: 2 (number, optional) - Quantity of ordered product. If not provided quantity is 1.
+
+
+## AdditionalDataBase
+- variableId: customerCountry (string, required) - Id of data object in administration
+- value: Czech Republic (string, required) - Value of data object
+
+## AdditionalData (AdditionalDataBase, fixed-type)
+
+## AdditionalDataRequest (AdditionalDataBase)
+- type (AdditionDataComponent,required) - Type of data object
+- class: textInputClass (string, optional) - CSS class of data object
+- label: Label (string, optional) - input label which describes the field. for type input-text
+- validationRegExp (string, optional) - javascript regular expression for input validation on client side. for type input-text
+- validationErrorMessage (string, optional) - message to be displayed if validation fails. for type input-text
+- target (string, optional) - target of data object
+
+## Outlet (fixed-type)
+- id: 77 (number, required) - Unique identificator of outlet
+- name: Outlet 1 (string, required) - Display name of outlet
+- supportedOrderPayment (array[OrderPayment], fixed-type, required) - List of supported payment methods for this outlet.
+- supportedOrderType (array[OrderType],fixed-type, required) - List of supported order types
+- tables (array[OutletTable], fixed-type, required) - List of tables in outlet
+
+## OutletTable (fixed-type)
+- id: 1 (number, required) - Unique identificator of table in outlet
+- name: Table 1 (string, required) - Display name of table
+
+## OutletOrderAvailability (fixed-type)
+- outletId: 77 (number, required) - Identification of outlet
+- date: 2.4.2017 (string, required) - Available date for order
+- orderTimes: 10:10 (array[string], required,sample, fixed-type) - Available order times for this date. Format HH:mm 
+
+## OrderTime (fixed-type)
+- from: 10:00 (string, required) - format HH:mm
+- to: 20:00  (string, required) - format HH:mm
+
+## CustomerProfileBase (fixed-type)
+- email: john.doe@gmail.com (string, required) - Customer email (unique in database). Cannot be changed
+- firstName: John (string, required) - First name of customer
+- lastName: Doe (string, required) - Last name of customer
+
+
+## CustomerProfileRequest (CustomerProfileBase, fixed-type)
+- additionalData (array[AdditionalDataRequest], optional) - Other customer informations
+
+
+## CustomerProfile (CustomerProfileBase, fixed-type)
+- id: 832 (number, required) - Unique id of customer
+- additionalData (array[AdditionalData], fixed-type, optional) - Other customer informations
+
+
+## OrderBase (fixed-type)
+- orderType: toTable (OrderType,sample, required) - Type of order (instore or takeaway)
+- orderDateTime: `dd-MM-yyyy HH:mm`  (string, required) - DateTime of order.
+- tableId: 123 (number,optional) - Required for orderType 'toTable', ignored for any other orderType.
+- orderItems (array[OrderItem], required, fixed-type) - List of ordered products (product id, quantity and modifiers)
+
+## OrderBaseRequest (OrderBase, fixed-type)
+- customerEmail: john.doe@gmail.com (string,optional) - Ignored if customer auth header present. Order can be created without email.
+- orderPayment: account (OrderPayment,sample,optional) - Optional. The only supported value is 'account' - order is paid directly from the customer account. If orderPayment is empty, the order is not paid at the moment when it is created and waits for "order/payment", status of such order is 0 (payment required). For the orderType 'toBill' the value is ignored.
+- calculatedPrice: 300 (number, required) - Price of order calculated by client.
+- billCode: abc123 (string,optional) - Required for orderType 'toBill'. Ignored for any other orderType.
+- outletId (number, required): 232 - Outlet id of order
+
+## OrderRequest (OrderBaseRequest, fixed-type)
+- additionalData (array[AdditionalDataRequest], optional) - Other order data
+- annotation (string, optional) - Annotation for order
+
+## Order (OrderBase, fixed-type)
+- id: abc (string, required) - Unique identification of order
+- status (OrderStatus, required) - Current status code of order. See introduction for status codes description.
+- key: F230 (string, optional) - Order key for pick up (on store monitor)
+- orderPrice: 232 (number, required) - Total price of order
+- outlet: OutletA (string,required) - Text identification of outlet
+- annotation: abc (string, fixed-type, optional) - Customer annotation (note) for order
+- additionalData (array[AdditionalData], fixed-type, optional) - Other customer informations
+
+
+## OrderConfirmation (fixed-type)
+- id: abc (string, required) - Unique identification of order
+- status (OrderStatus, required) - Current status code of order. See introduction for status codes description.
+- key: F230 (string, optional) - Order key for pick up (on store monitor)
+- orderPrice: 232 (number, required) - The order price. Note, that when the orderType is "toBill", it is no the price of the whole bill but only of the current part of the order.
+- toBePaid: 111 (number, required) - The amount, which remains to be paid for the order. In the case of the payment by card, this is the price which should be sent to the gateway.
+- paid: 10 (number, required) - The actually paid amount. In the current implementation we will support only one payment per order so the value is either 0 or equals orderPrice, if the order was paid from the user account. In future this may change.
+
+## SlideshowItem (fixed-type)
+- imageURL: image://abc.jpg (string, required) - URL to slideshow page image. See Introduction -  Links
+- link: http://link.to.page/ (string, required) - URL to load when customer click on slideshow. See Introduction -  Links
+
+## Transaction (fixed-type)
+- id: 23 (number, required) - Unique identificator of transaction
+- amount: `-300` (number, required) - Amount changed on customer account
+- dateTime: `dd-MM-yyyy HH:mm`  (string, required) - DateTime of transaction
+- description: Payment of order 233 (string, required) - Description text of transaction
+
+##GatewayRequest (fixed-type)
+- orderId: abc (string, required) - Identification of order.
+- toBePaid: 111 (number, required) - The amount, which should be paid.
+- successUrl: http://return.url/ (string, required) -  Defines success return adress, after payement completion
+- failUrl: http://return.url/ (string, required) -  Defines fail return adress, after payement completion
+
+##GatewayResponse (fixed-type)
+- gatewayLink: http://link.to.gateway/payment (string, required) - Link to payment gateway
+
+
+## PaymentResult (fixed-type)
+- orderId: abc (string, required) - Id of order payed through gateway
+- paymentSuccessful: true (boolean, required) - Result of payment
+- paymentMethod: creditcard (OrderPayment, sample, required) - As for now, the only supported value is 'credit card'. Any other value results in error.
+
+## PaymentResultResponse (fixed-type)
+- toBePaid: 122 (number, required) - The amount, which remains to be paid for the order.
+- paid: 23 (number, required) - see order.paid
+- status (OrderStatus, required) -  The order status. Order status = 1 (waiting) in combination with toBePaid = 0 means, that the order has been succesfully and fully paid.
