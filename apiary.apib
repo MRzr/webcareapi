@@ -34,23 +34,23 @@ Order payment can be either account or creditcard. When creating order with acco
 
 Order can be in state 0 - Payment required only for 30 minutes, after this time order is cancelled by WEB API.
 
-Order status numbers:
+## OrderStatus (enum[number])
+== OPEN ==
+- 0 - Payment required
+- 1 - Order waiting
+- 2 - Ready for pick up
+- 3 - Open Account
 
--- OPEN -- 
+== CLOSED ==
+- 5 - Completed
+- 6 - Cancelled
 
-0 - Payment required
+## PaymentStatus (enum[number])
+- O - Payment initialized
+- 1 - Payment in progress
+- 2 - Payment successful
+- 3 - Payment failed
 
-1 - Order waiting
-
-2 - Ready for pick up
-
-3 - Open Account
-
--- CLOSED --
-
-5 - Completed
-
-6 - Cancelled
 
 Order process diagram: https://drive.google.com/file/d/1vv5XLxie2fQq3UEHmDg1OdzXrPS-yLBi/view?usp=sharing
 
@@ -216,9 +216,10 @@ Ideal number of products is 5. Algorithm for displaying recommended products is 
     + Attributes (array[RecommendedProduct], fixed-type, required)   
         + force: abc (string, optional) - force response call
 
+## Order payment  [/order/payment]
 
 
-### Order payment [POST /order/payment]
+### Order payment (TO BE DEPRECATED) [POST /order/payment]
 
 Request between private Web API and Septim API. Confirms successful payment of order or cancels order in case of error in payment.
 Request is authorized with admin customername and password.
@@ -232,6 +233,36 @@ Request is authorized with admin customername and password.
         
 + Response 200 (application/json)
     + Attributes (PaymentResultResponse, required, fixed-type)
+    
+
+### Request order payment  [POST /order/payment/request]
+
+Request between payment of order for specified amount.
+    
++ Request (application/json)
+    + Headers
+    
+            Authorization: abc (admin credentials)
+        
+    + Attributes (PaymentRequest, required, fixed-type)
+        
++ Response 200 (application/json)
+    + Attributes (PaymentRequestResponse, required, fixed-type)
+
+### Set payment status [POST /order/payement/status]
+
+Set status of payment. State 2 and 3 are immutable and cannot be changed after set once. 
+
++ Request (application/json)
+    + Headers
+    
+            Authorization: abc (admin credentials)
+        
+    + Attributes (PaymentResultStatus, required, fixed-type)
+        
++ Response 200 (application/json)
+        
+        + success: true (boolean, required)
 
 ## Web content [/web]
 
@@ -437,14 +468,14 @@ Returns customer's transaction history and current account balance.
         + balance: 430 (number, required, fixed-type) - Current customer's balance
 
 
-## Web API requests [/api]
+## Payment bridge requests [/api]
 
 
 ### Get payment link [POST /api/payment/link]
 
 Not part of Septim API
     
-Request between client and web api.
+Request between client and payment bridge.
 
 After payment validation, browser is redirected to specified return URL with GET parameters with order id and payment result. (?orderId=abv&paymentSuccess=true)
 
@@ -497,6 +528,13 @@ eg http://septim.visualio.cz/set?orderType=toBiil&outletId=1&billCode=abc
 - 3 - Open Account
 - 5 - Completed
 - 6 - Cancelled
+
+## PaymentStatus (enum[number])
+- 0 - Payment initialized
+- 1 - Payment in progress
+- 2 - Payment successful
+- 3 - Payment failed
+
 
 ## AdditionDataComponent (enum[string])
 - const-image
@@ -654,11 +692,25 @@ eg http://septim.visualio.cz/set?orderType=toBiil&outletId=1&billCode=abc
 ##GatewayResponse (fixed-type)
 - gatewayLink: http://link.to.gateway/payment (string, required) - Link to payment gateway
 
+##PaymentRequest (fixed-type)
+- orderId: abc (string, required) - Identification of order.
+- toBePaid: 111 (number, required) - The amount, which should be paid.
+
+##PaymentRequestResponse (fixed-type)
+- paymentId: 2332332233 (string, required) - Id of payement. Numeric string max 10 chars
+- orderId: abc (string, required) - Identification of order.
+- toBePaid: 111 (number, required) - The amount, which should be paid.
+
+## PaymentResultStatus (fixed-type)
+- paymentId: 2332332233 (string, required) - Id of payement. Numeric string max 10 chars
+- status: 3 (PaymentStatus, sample, required) - Result status of payment.
 
 ## PaymentResult (fixed-type)
 - orderId: abc (string, required) - Id of order payed through gateway
 - paymentSuccessful: true (boolean, required) - Result of payment
 - paymentMethod: creditcard (OrderPayment, sample, required) - As for now, the only supported value is 'credit card'. Any other value results in error.
+
+
 
 ## PaymentResultResponse (fixed-type)
 - toBePaid: 122 (number, required) - The amount, which remains to be paid for the order.
