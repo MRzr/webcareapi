@@ -219,7 +219,7 @@ Ideal number of products is 5. Algorithm for displaying recommended products is 
 ## Order payment  [/order/payment]
 
 
-### Order payment (TO BE DEPRECATED) [POST /order/payment]
+### Order payment (DEPRECATED) [POST /order/payment]
 
 Request between private Web API and Septim API. Confirms successful payment of order or cancels order in case of error in payment.
 Request is authorized with admin customername and password.
@@ -249,7 +249,7 @@ Request between payment of order for specified amount.
 + Response 200 (application/json)
     + Attributes (PaymentRequestResponse, required, fixed-type)
 
-### Set payment status [POST /order/payement/status]
+### Set payment status [POST /order/payment/status]
 
 Set status of payment. State 2 and 3 are immutable and cannot be changed after set once. 
 
@@ -468,10 +468,10 @@ Returns customer's transaction history and current account balance.
         + balance: 430 (number, required, fixed-type) - Current customer's balance
 
 
-## Payment bridge requests [/api]
+## Payment bridge requests [/paymentbridge/]
 
 
-### Get payment link [POST /api/payment/link]
+### Get payment link [POST /paymentbridge/link]
 
 Not part of Septim API
     
@@ -686,8 +686,8 @@ eg http://septim.visualio.cz/set?orderType=toBiil&outletId=1&billCode=abc
 ##GatewayRequest (fixed-type)
 - orderId: abc (string, required) - Identification of order.
 - toBePaid: 111 (number, required) - The amount, which should be paid.
-- successUrl: http://return.url/ (string, required) -  Defines success return adress, after payement completion
-- failUrl: http://return.url/ (string, required) -  Defines fail return adress, after payement completion
+- successUrl: http://return.url/ (string, required) -  Defines success return adress, after payment completion
+- failUrl: http://return.url/ (string, required) -  Defines fail return adress, after payment completion
 
 ##GatewayResponse (fixed-type)
 - gatewayLink: http://link.to.gateway/payment (string, required) - Link to payment gateway
@@ -697,13 +697,15 @@ eg http://septim.visualio.cz/set?orderType=toBiil&outletId=1&billCode=abc
 - toBePaid: 111 (number, required) - The amount, which should be paid.
 
 ##PaymentRequestResponse (fixed-type)
-- paymentId: 2332332233 (string, required) - Id of payement. Numeric string max 10 chars
+- paymentId: 2332332233 (string, required) - Id of payment. Numeric string max 10 chars
 - orderId: abc (string, required) - Identification of order.
 - toBePaid: 111 (number, required) - The amount, which should be paid.
 
 ## PaymentResultStatus (fixed-type)
-- paymentId: 2332332233 (string, required) - Id of payement. Numeric string max 10 chars
+- paymentId: 2332332233 (string, required) - Id of payment. Numeric string max 10 chars
 - status: 3 (PaymentStatus, sample, required) - Result status of payment.
+- paymentMethod: creditcard (OrderPayment, sample, required) - As for now, the only supported value is 'credit card'. Any other value results in error.
+- paid: 23 (number, optional) - see order.paid. Provided if is supported by Payement Gateway.
 
 ## PaymentResult (fixed-type)
 - orderId: abc (string, required) - Id of order payed through gateway
