@@ -657,7 +657,8 @@ eg http://septim.visualio.cz/set?orderType=toBiil&outletId=1&billCode=abc
 
 ## Order (OrderBase, fixed-type)
 - id: abc (string, required) - Unique identification of order
-- status (OrderStatus, required) - Current status code of order. See introduction for status codes description.
+- orderStatus (OrderStatus, required) - Current status code of order. See introduction for status codes description.
+- paymentStatus (PaymentStatus, required) - Current payment status of order. See introduction for payment codes description.
 - key: F230 (string, optional) - Order key for pick up (on store monitor)
 - orderPrice: 232 (number, required) - Total price of order
 - outlet: OutletA (string,required) - Text identification of outlet
@@ -667,9 +668,9 @@ eg http://septim.visualio.cz/set?orderType=toBiil&outletId=1&billCode=abc
 
 ## OrderConfirmation (fixed-type)
 - id: abc (string, required) - Unique identification of order
-- status (OrderStatus, required) - Current status code of order. See introduction for status codes description.
 - key: F230 (string, optional) - Order key for pick up (on store monitor)
-- orderPrice: 232 (number, required) - The order price. Note, that when the orderType is "toBill", it is no the price of the whole bill but only of the current part of the order.
+- status (OrderStatus, required) - Current status code of order. See introduction for status codes description.
+ch- orderPrice: 232 (number, required) - The order price. Note, that when the orderType is "toBill", it is no the price of the whole bill but only of the current part of the order.
 - toBePaid: 111 (number, required) - The amount, which remains to be paid for the order. In the case of the payment by card, this is the price which should be sent to the gateway.
 - paid: 10 (number, required) - The actually paid amount. In the current implementation we will support only one payment per order so the value is either 0 or equals orderPrice, if the order was paid from the user account. In future this may change.
 
